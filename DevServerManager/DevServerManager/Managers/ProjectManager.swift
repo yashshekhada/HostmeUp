@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Data Models
 
-struct Project: Identifiable, Codable {
+struct Project: Identifiable, Codable, Hashable {
     let id = UUID()
     var name: String
     var path: String
@@ -48,7 +48,7 @@ enum ProjectType: String, CaseIterable, Codable {
     case rust = "Rust"
     case java = "Java"
     case spring = "Spring Boot"
-    case static = "Static Site"
+    case `static` = "Static Site"
     case gatsby = "Gatsby"
     case hugo = "Hugo"
     case jekyll = "Jekyll"

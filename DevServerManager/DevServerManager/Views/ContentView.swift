@@ -209,7 +209,6 @@ struct ProjectDetailView: View {
             Spacer()
         }
         .padding()
-        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingLogs) {
             LogsView(project: project)
         }
@@ -269,13 +268,12 @@ struct AddProjectView: View {
                         .onAppear {
                             startCommand = type.defaultCommand
                         }
-                        .onChange(of: type) { newType in
-                            startCommand = newType.defaultCommand
+                        .onChange(of: type) { oldValue, newValue in
+                            startCommand = newValue.defaultCommand
                         }
                 }
             }
             .navigationTitle("Add Project")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -334,7 +332,6 @@ struct LogsView: View {
                     Spacer()
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {

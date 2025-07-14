@@ -7,36 +7,36 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2B1234567890ABCD /* DevServerManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABCE /* DevServerManagerApp.swift */; };
-		2B1234567890ABCF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABD0 /* ContentView.swift */; };
-		2B1234567890ABD1 /* ProjectManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABD2 /* ProjectManager.swift */; };
-		2B1234567890ABD3 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABD4 /* ServerManager.swift */; };
-		2B1234567890ABD5 /* PortForwardingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABD6 /* PortForwardingManager.swift */; };
-		2B1234567890ABD7 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABD8 /* NetworkManager.swift */; };
-		2B1234567890ABD9 /* ProjectSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABDA /* ProjectSettingsView.swift */; };
-		2B1234567890ABDB /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABDC /* StatusView.swift */; };
-		2B1234567890ABDD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABDE /* Assets.xcassets */; };
-		2B1234567890ABDF /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B1234567890ABE0 /* Preview Assets.xcassets */; };
+		2B4E1A5F2C4D3B2E00123456 /* DevServerManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A5E2C4D3B2E00123456 /* DevServerManagerApp.swift */; };
+		2B4E1A612C4D3B2E00123456 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A602C4D3B2E00123456 /* ContentView.swift */; };
+		2B4E1A632C4D3B2F00123456 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B4E1A622C4D3B2F00123456 /* Assets.xcassets */; };
+		2B4E1A662C4D3B2F00123456 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2B4E1A652C4D3B2F00123456 /* Preview Assets.xcassets */; };
+		2B4E1A712C4D3B5400123456 /* ProjectManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A702C4D3B5400123456 /* ProjectManager.swift */; };
+		2B4E1A732C4D3B5B00123456 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A722C4D3B5B00123456 /* ServerManager.swift */; };
+		2B4E1A752C4D3B6200123456 /* PortForwardingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A742C4D3B6200123456 /* PortForwardingManager.swift */; };
+		2B4E1A772C4D3B6900123456 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A762C4D3B6900123456 /* NetworkManager.swift */; };
+		2B4E1A792C4D3B7000123456 /* ProjectSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A782C4D3B7000123456 /* ProjectSettingsView.swift */; };
+		2B4E1A7B2C4D3B7700123456 /* StatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4E1A7A2C4D3B7700123456 /* StatusView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		2B1234567890ABCB /* DevServerManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DevServerManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2B1234567890ABCE /* DevServerManagerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevServerManagerApp.swift; sourceTree = "<group>"; };
-		2B1234567890ABD0 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		2B1234567890ABD2 /* ProjectManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectManager.swift; sourceTree = "<group>"; };
-		2B1234567890ABD4 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
-		2B1234567890ABD6 /* PortForwardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortForwardingManager.swift; sourceTree = "<group>"; };
-		2B1234567890ABD8 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
-		2B1234567890ABDA /* ProjectSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSettingsView.swift; sourceTree = "<group>"; };
-		2B1234567890ABDC /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
-		2B1234567890ABDE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		2B1234567890ABE0 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		2B1234567890ABE2 /* DevServerManager.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DevServerManager.entitlements; sourceTree = "<group>"; };
-		2B1234567890ABE3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2B4E1A5B2C4D3B2E00123456 /* DevServerManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DevServerManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B4E1A5E2C4D3B2E00123456 /* DevServerManagerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevServerManagerApp.swift; sourceTree = "<group>"; };
+		2B4E1A602C4D3B2E00123456 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2B4E1A622C4D3B2F00123456 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2B4E1A652C4D3B2F00123456 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		2B4E1A672C4D3B2F00123456 /* DevServerManager.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DevServerManager.entitlements; sourceTree = "<group>"; };
+		2B4E1A682C4D3B2F00123456 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2B4E1A702C4D3B5400123456 /* ProjectManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectManager.swift; sourceTree = "<group>"; };
+		2B4E1A722C4D3B5B00123456 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
+		2B4E1A742C4D3B6200123456 /* PortForwardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortForwardingManager.swift; sourceTree = "<group>"; };
+		2B4E1A762C4D3B6900123456 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
+		2B4E1A782C4D3B7000123456 /* ProjectSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSettingsView.swift; sourceTree = "<group>"; };
+		2B4E1A7A2C4D3B7700123456 /* StatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		2B1234567890ABC8 /* Frameworks */ = {
+		2B4E1A582C4D3B2E00123456 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,75 +46,75 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		2B1234567890ABC2 = {
+		2B4E1A522C4D3B2E00123456 = {
 			isa = PBXGroup;
 			children = (
-				2B1234567890ABCD /* DevServerManager */,
-				2B1234567890ABCC /* Products */,
+				2B4E1A5D2C4D3B2E00123456 /* DevServerManager */,
+				2B4E1A5C2C4D3B2E00123456 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		2B1234567890ABCC /* Products */ = {
+		2B4E1A5C2C4D3B2E00123456 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2B1234567890ABCB /* DevServerManager.app */,
+				2B4E1A5B2C4D3B2E00123456 /* DevServerManager.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		2B1234567890ABCD /* DevServerManager */ = {
+		2B4E1A5D2C4D3B2E00123456 /* DevServerManager */ = {
 			isa = PBXGroup;
 			children = (
-				2B1234567890ABCE /* DevServerManagerApp.swift */,
-				2B1234567890ABE4 /* Views */,
-				2B1234567890ABE5 /* Managers */,
-				2B1234567890ABDE /* Assets.xcassets */,
-				2B1234567890ABE2 /* DevServerManager.entitlements */,
-				2B1234567890ABE3 /* Info.plist */,
-				2B1234567890ABE1 /* Preview Content */,
+				2B4E1A5E2C4D3B2E00123456 /* DevServerManagerApp.swift */,
+				2B4E1A7C2C4D3B8000123456 /* Views */,
+				2B4E1A6F2C4D3B4C00123456 /* Managers */,
+				2B4E1A622C4D3B2F00123456 /* Assets.xcassets */,
+				2B4E1A672C4D3B2F00123456 /* DevServerManager.entitlements */,
+				2B4E1A682C4D3B2F00123456 /* Info.plist */,
+				2B4E1A642C4D3B2F00123456 /* Preview Content */,
 			);
 			path = DevServerManager;
 			sourceTree = "<group>";
 		};
-		2B1234567890ABE1 /* Preview Content */ = {
+		2B4E1A642C4D3B2F00123456 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
-				2B1234567890ABE0 /* Preview Assets.xcassets */,
+				2B4E1A652C4D3B2F00123456 /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
-		2B1234567890ABE4 /* Views */ = {
+		2B4E1A6F2C4D3B4C00123456 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
-				2B1234567890ABD0 /* ContentView.swift */,
-				2B1234567890ABDA /* ProjectSettingsView.swift */,
-				2B1234567890ABDC /* StatusView.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		2B1234567890ABE5 /* Managers */ = {
-			isa = PBXGroup;
-			children = (
-				2B1234567890ABD2 /* ProjectManager.swift */,
-				2B1234567890ABD4 /* ServerManager.swift */,
-				2B1234567890ABD6 /* PortForwardingManager.swift */,
-				2B1234567890ABD8 /* NetworkManager.swift */,
+				2B4E1A702C4D3B5400123456 /* ProjectManager.swift */,
+				2B4E1A722C4D3B5B00123456 /* ServerManager.swift */,
+				2B4E1A742C4D3B6200123456 /* PortForwardingManager.swift */,
+				2B4E1A762C4D3B6900123456 /* NetworkManager.swift */,
 			);
 			path = Managers;
+			sourceTree = "<group>";
+		};
+		2B4E1A7C2C4D3B8000123456 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2B4E1A602C4D3B2E00123456 /* ContentView.swift */,
+				2B4E1A782C4D3B7000123456 /* ProjectSettingsView.swift */,
+				2B4E1A7A2C4D3B7700123456 /* StatusView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		2B1234567890ABCA /* DevServerManager */ = {
+		2B4E1A5A2C4D3B2E00123456 /* DevServerManager */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2B1234567890ABEA /* Build configuration list for PBXNativeTarget "DevServerManager" */;
+			buildConfigurationList = 2B4E1A6B2C4D3B2F00123456 /* Build configuration list for PBXNativeTarget "DevServerManager" */;
 			buildPhases = (
-				2B1234567890ABC7 /* Sources */,
-				2B1234567890ABC8 /* Frameworks */,
-				2B1234567890ABC9 /* Resources */,
+				2B4E1A572C4D3B2E00123456 /* Sources */,
+				2B4E1A582C4D3B2E00123456 /* Frameworks */,
+				2B4E1A592C4D3B2E00123456 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -122,25 +122,25 @@
 			);
 			name = DevServerManager;
 			productName = DevServerManager;
-			productReference = 2B1234567890ABCB /* DevServerManager.app */;
+			productReference = 2B4E1A5B2C4D3B2E00123456 /* DevServerManager.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		2B1234567890ABC3 /* Project object */ = {
+		2B4E1A532C4D3B2E00123456 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
-					2B1234567890ABCA = {
+					2B4E1A5A2C4D3B2E00123456 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
 			};
-			buildConfigurationList = 2B1234567890ABC6 /* Build configuration list for PBXProject "DevServerManager" */;
+			buildConfigurationList = 2B4E1A562C4D3B2E00123456 /* Build configuration list for PBXProject "DevServerManager" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -148,33 +148,34 @@
 				en,
 				Base,
 			);
-			mainGroup = 2B1234567890ABC2;
-			productRefGroup = 2B1234567890ABCC /* Products */;
+			mainGroup = 2B4E1A522C4D3B2E00123456;
+			productRefGroup = 2B4E1A5C2C4D3B2E00123456 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				2B1234567890ABCA /* DevServerManager */,
+				2B4E1A5A2C4D3B2E00123456 /* DevServerManager */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		2B1234567890ABC9 /* Resources */ = {
+		2B4E1A592C4D3B2E00123456 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2B1234567890ABDF /* Preview Assets.xcassets in Resources */,
-				2B1234567890ABDD /* Assets.xcassets in Resources */,
+				2B4E1A662C4D3B2F00123456 /* Preview Assets.xcassets in Resources */,
+				2B4E1A632C4D3B2F00123456 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		2B1234567890ABC7 /* Sources */ = {
+		2B4E1A572C4D3B2E00123456 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+<<<<<<< Updated upstream
 				2B1234567890ABCF /* ContentView.swift in Sources */,
 				2B1234567890ABD1 /* ProjectManager.swift in Sources */,
 				2B1234567890ABD3 /* ServerManager.swift in Sources */,
@@ -183,13 +184,23 @@
 				2B1234567890ABD9 /* ProjectSettingsView.swift in Sources */,
 				2B1234567890ABDB /* StatusView.swift in Sources */,
 				2B1234567890ABC7 /* DevServerManagerApp.swift in Sources */,
+=======
+				2B4E1A712C4D3B5400123456 /* ProjectManager.swift in Sources */,
+				2B4E1A732C4D3B5B00123456 /* ServerManager.swift in Sources */,
+				2B4E1A752C4D3B6200123456 /* PortForwardingManager.swift in Sources */,
+				2B4E1A772C4D3B6900123456 /* NetworkManager.swift in Sources */,
+				2B4E1A792C4D3B7000123456 /* ProjectSettingsView.swift in Sources */,
+				2B4E1A7B2C4D3B7700123456 /* StatusView.swift in Sources */,
+				2B4E1A612C4D3B2E00123456 /* ContentView.swift in Sources */,
+				2B4E1A5F2C4D3B2E00123456 /* DevServerManagerApp.swift in Sources */,
+>>>>>>> Stashed changes
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		2B1234567890ABE8 /* Debug */ = {
+		2B4E1A692C4D3B2F00123456 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -252,7 +263,7 @@
 			};
 			name = Debug;
 		};
-		2B1234567890ABE9 /* Release */ = {
+		2B4E1A6A2C4D3B2F00123456 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -307,7 +318,7 @@
 			};
 			name = Release;
 		};
-		2B1234567890ABEB /* Debug */ = {
+		2B4E1A6C2C4D3B2F00123456 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -334,7 +345,7 @@
 			};
 			name = Debug;
 		};
-		2B1234567890ABEC /* Release */ = {
+		2B4E1A6D2C4D3B2F00123456 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -364,25 +375,25 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2B1234567890ABC6 /* Build configuration list for PBXProject "DevServerManager" */ = {
+		2B4E1A562C4D3B2E00123456 /* Build configuration list for PBXProject "DevServerManager" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				2B1234567890ABE8 /* Debug */,
-				2B1234567890ABE9 /* Release */,
+				2B4E1A692C4D3B2F00123456 /* Debug */,
+				2B4E1A6A2C4D3B2F00123456 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2B1234567890ABEA /* Build configuration list for PBXNativeTarget "DevServerManager" */ = {
+		2B4E1A6B2C4D3B2F00123456 /* Build configuration list for PBXNativeTarget "DevServerManager" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				2B1234567890ABEB /* Debug */,
-				2B1234567890ABEC /* Release */,
+				2B4E1A6C2C4D3B2F00123456 /* Debug */,
+				2B4E1A6D2C4D3B2F00123456 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 2B1234567890ABC3 /* Project object */;
+	rootObject = 2B4E1A532C4D3B2E00123456 /* Project object */;
 }

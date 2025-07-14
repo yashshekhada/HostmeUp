@@ -122,7 +122,6 @@ struct ProjectSettingsView: View {
                 }
             }
             .navigationTitle("Project Settings")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

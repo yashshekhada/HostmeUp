@@ -311,7 +311,7 @@ class NetworkManager: ObservableObject {
             if let addresses = CFHostGetAddressing(host, &success)?.takeUnretainedValue() as? [Data] {
                 let ipAddresses = addresses.compactMap { data -> String? in
                     return data.withUnsafeBytes { bytes in
-                        let sockaddr = bytes.bindMemory(to: sockaddr.self).first!
+                        var sockaddr = bytes.bindMemory(to: sockaddr.self).first!
                         var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                         
                         if getnameinfo(&sockaddr, socklen_t(data.count),

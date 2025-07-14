@@ -152,8 +152,8 @@ struct StatusView: View {
     
     private func startRefreshTimer() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            // Refresh network information
-            objectWillChange.send()
+            // Refresh network information - SwiftUI will automatically update the view
+            // when @State variables change
         }
     }
     

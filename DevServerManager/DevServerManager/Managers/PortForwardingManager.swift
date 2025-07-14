@@ -259,7 +259,7 @@ struct PortForwardingRule {
     let localPort: Int
     let externalPort: Int
     let isActive: Bool
-    let protocol: NetworkProtocol
+    let `protocol`: NetworkProtocol
     let description: String
 }
 
