@@ -1,44 +1,21 @@
 import SwiftUI
+import Combine
 
 struct StatusView: View {
     @EnvironmentObject var projectManager: ProjectManager
     @StateObject private var networkManager = NetworkManager.shared
-    @State private var refreshTimer: Timer?
+    @State private var cancellables = Set<AnyCancellable>()
     
     var body: some View {
         VStack(spacing: 20) {
             // System Overview
             GroupBox("System Overview") {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "network")
-                            .foregroundColor(.blue)
-                        Text("Network Status")
-                        Spacer()
-                        Circle()
-                            .fill(networkManager.isConnectedToInternet ? .green : .red)
-                            .frame(width: 10, height: 10)
-                        Text(networkManager.isConnectedToInternet ? "Connected" : "Disconnected")
-                            .foregroundColor(networkManager.isConnectedToInternet ? .green : .red)
-                    }
+                    NetworkStatusRow(isConnected: networkManager.isConnectedToInternet)
                     
-                    HStack {
-                        Image(systemName: "server.rack")
-                            .foregroundColor(.orange)
-                        Text("Running Servers")
-                        Spacer()
-                        Text("\(runningServersCount)")
-                            .foregroundColor(.secondary)
-                    }
+                    ServerStatusRow(runningCount: runningServersCount)
                     
-                    HStack {
-                        Image(systemName: "folder")
-                            .foregroundColor(.purple)
-                        Text("Total Projects")
-                        Spacer()
-                        Text("\(projectManager.projects.count)")
-                            .foregroundColor(.secondary)
-                    }
+                    ProjectStatusRow(totalCount: projectManager.projects.count)
                 }
                 .padding()
             }
@@ -46,37 +23,22 @@ struct StatusView: View {
             // Network Information
             GroupBox("Network Information") {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Local IP:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(networkManager.localIPAddress)
-                            .font(.caption)
-                            .textSelection(.enabled)
-                    }
+                    NetworkInfoRow(
+                        label: "Local IP:",
+                        value: networkManager.localIPAddress
+                    )
                     
                     if let externalIP = networkManager.externalIPAddress {
-                        HStack {
-                            Text("External IP:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(externalIP)
-                                .font(.caption)
-                                .textSelection(.enabled)
-                        }
+                        NetworkInfoRow(
+                            label: "External IP:",
+                            value: externalIP
+                        )
                     }
                     
-                    HStack {
-                        Text("Active Interfaces:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("\(activeInterfacesCount)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    NetworkInfoRow(
+                        label: "Active Interfaces:",
+                        value: "\(activeInterfacesCount)"
+                    )
                 }
                 .padding()
             }
@@ -84,15 +46,10 @@ struct StatusView: View {
             // Port Overview
             GroupBox("Port Overview") {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Port Range: 3000-3300")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("Available: \(availablePortsCount)")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                    }
+                    PortInfoRow(
+                        range: "Port Range: 3000-3300",
+                        available: availablePortsCount
+                    )
                     
                     // Port Usage Chart
                     PortUsageChart(projects: projectManager.projects)
@@ -101,10 +58,10 @@ struct StatusView: View {
             }
             
             // Running Servers
-            if runningServersCount > 0 {
+            if !runningProjects.isEmpty {
                 GroupBox("Running Servers") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(runningProjects) { project in
+                    LazyVStack(spacing: 8) {
+                        ForEach(runningProjects, id: \.id) { project in
                             RunningServerRow(project: project)
                         }
                     }
@@ -112,29 +69,21 @@ struct StatusView: View {
                 }
             }
             
-            // Network Interfaces
-            GroupBox("Network Interfaces") {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(networkManager.networkInterfaces, id: \.name) { interface in
-                        NetworkInterfaceRow(interface: interface)
-                    }
-                }
-                .padding()
-            }
-            
             Spacer()
         }
         .padding()
         .onAppear {
-            startRefreshTimer()
+            setupReactiveUpdates()
         }
         .onDisappear {
-            stopRefreshTimer()
+            cancellables.removeAll()
         }
     }
     
+    // MARK: - Computed Properties
+    
     private var runningServersCount: Int {
-        projectManager.projects.filter { $0.status == .running }.count
+        projectManager.projects.lazy.filter { $0.status == .running }.count
     }
     
     private var runningProjects: [Project] {
@@ -142,24 +91,154 @@ struct StatusView: View {
     }
     
     private var activeInterfacesCount: Int {
-        networkManager.networkInterfaces.filter { $0.isActive }.count
+        networkManager.networkInterfaces.lazy.filter { $0.isActive }.count
     }
     
     private var availablePortsCount: Int {
-        let usedPorts = Set(projectManager.projects.map { $0.port })
-        return (3000...3300).filter { !usedPorts.contains($0) }.count
+        let usedPorts = Set(projectManager.projects.lazy.map { $0.port })
+        return (3000...3300).lazy.filter { !usedPorts.contains($0) }.count
     }
     
-    private func startRefreshTimer() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            // Refresh network information
-            objectWillChange.send()
+    // MARK: - Reactive Updates
+    
+    private func setupReactiveUpdates() {
+        // Debounced network updates
+        networkManager.objectWillChange
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak networkManager] _ in
+                networkManager?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+        
+        // Throttled project updates
+        projectManager.objectWillChange
+            .throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)
+            .sink { _ in
+                // Update triggered by project changes
+            }
+            .store(in: &cancellables)
+    }
+}
+
+// MARK: - Optimized Row Components
+
+struct NetworkStatusRow: View {
+    let isConnected: Bool
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "network")
+                .foregroundColor(.blue)
+            Text("Network Status")
+            Spacer()
+            Circle()
+                .fill(isConnected ? .green : .red)
+                .frame(width: 10, height: 10)
+            Text(isConnected ? "Connected" : "Disconnected")
+                .foregroundColor(isConnected ? .green : .red)
         }
     }
+}
+
+struct ServerStatusRow: View {
+    let runningCount: Int
     
-    private func stopRefreshTimer() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+    var body: some View {
+        HStack {
+            Image(systemName: "server.rack")
+                .foregroundColor(.orange)
+            Text("Running Servers")
+            Spacer()
+            Text("\(runningCount)")
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+struct ProjectStatusRow: View {
+    let totalCount: Int
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "folder")
+                .foregroundColor(.purple)
+            Text("Total Projects")
+            Spacer()
+            Text("\(totalCount)")
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+struct NetworkInfoRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.caption)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+struct PortInfoRow: View {
+    let range: String
+    let available: Int
+    
+    var body: some View {
+        HStack {
+            Text(range)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("Available: \(available)")
+                .font(.caption)
+                .foregroundColor(.green)
+        }
+    }
+}
+
+struct PortUsageChart: View {
+    let projects: [Project]
+    
+    var body: some View {
+        let usedPorts = Set(projects.lazy.map { $0.port })
+        let totalPorts = 301 // 3000-3300
+        let usedCount = usedPorts.count
+        let availableCount = totalPorts - usedCount
+        let usagePercentage = Double(usedCount) / Double(totalPorts)
+        
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Port Usage")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(Int(usagePercentage * 100))%")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(.orange)
+                        .frame(width: geometry.size.width * usagePercentage)
+                    
+                    Rectangle()
+                        .fill(.gray.opacity(0.3))
+                        .frame(width: geometry.size.width * (1 - usagePercentage))
+                }
+            }
+            .frame(height: 8)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
     }
 }
 
@@ -171,7 +250,7 @@ struct RunningServerRow: View {
             Image(systemName: project.type.icon)
                 .foregroundColor(project.type.color)
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(project.name)
                     .font(.caption)
                     .fontWeight(.medium)
@@ -182,7 +261,7 @@ struct RunningServerRow: View {
             
             Spacer()
             
-            VStack(alignment: .trailing) {
+            VStack(alignment: .trailing, spacing: 2) {
                 if let processId = project.processId {
                     Text("PID: \(processId)")
                         .font(.caption2)
@@ -196,88 +275,11 @@ struct RunningServerRow: View {
                 }
             }
         }
+        .padding(.vertical, 2)
     }
 }
 
-struct NetworkInterfaceRow: View {
-    let interface: NetworkInterface
-    
-    var body: some View {
-        HStack {
-            Image(systemName: interface.type.icon)
-                .foregroundColor(interface.isActive ? .green : .gray)
-            
-            VStack(alignment: .leading) {
-                Text(interface.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Text(interface.type.rawValue)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .trailing) {
-                Text(interface.ipAddress)
-                    .font(.caption2)
-                    .textSelection(.enabled)
-                
-                Circle()
-                    .fill(interface.isActive ? .green : .gray)
-                    .frame(width: 6, height: 6)
-            }
-        }
-    }
-}
 
-struct PortUsageChart: View {
-    let projects: [Project]
-    
-    var body: some View {
-        HStack(spacing: 1) {
-            ForEach(3000...3300, id: \.self) { port in
-                Rectangle()
-                    .fill(portColor(for: port))
-                    .frame(height: 20)
-            }
-        }
-        .cornerRadius(2)
-    }
-    
-    private func portColor(for port: Int) -> Color {
-        if let project = projects.first(where: { $0.port == port }) {
-            switch project.status {
-            case .running:
-                return .green
-            case .stopped:
-                return .gray
-            case .starting, .stopping:
-                return .orange
-            case .error:
-                return .red
-            }
-        }
-        return .clear
-    }
-}
-
-extension InterfaceType {
-    var icon: String {
-        switch self {
-        case .ethernet:
-            return "cable.connector"
-        case .wifi:
-            return "wifi"
-        case .loopback:
-            return "arrow.triangle.2.circlepath"
-        case .vpn:
-            return "lock.shield"
-        case .other:
-            return "network"
-        }
-    }
-}
 
 #Preview {
     StatusView()

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 // MARK: - Data Models
 
@@ -103,10 +104,33 @@ enum ProjectType: String, CaseIterable, Codable {
         }
     }
     
-    var defaultCommand: String {
+    var prerequisites: [String] {
+        switch self {
+        case .nodejs, .react, .vue, .angular, .nextjs, .nuxt:
+            return ["Node.js", "npm"]
+        case .dotnet, .aspnet:
+            return [".NET SDK"]
+        case .python, .flask, .django, .fastapi:
+            return ["Python", "pip"]
+        case .ruby, .rails:
+            return ["Ruby", "gem"]
+        case .php, .laravel:
+            return ["PHP", "Composer"]
+        case .go:
+            return ["Go"]
+        case .rust:
+            return ["Rust", "Cargo"]
+        case .java, .spring:
+            return ["Java", "Maven/Gradle"]
+        case .static, .gatsby, .hugo, .jekyll:
+            return []
+        }
+    }
+    
+    var defaultStartCommand: String {
         switch self {
         case .nodejs:
-            return "node index.js"
+            return "npm start"
         case .react:
             return "npm start"
         case .vue:
@@ -155,135 +179,129 @@ enum ProjectType: String, CaseIterable, Codable {
             return "bundle exec jekyll serve"
         }
     }
-    
-    var prerequisites: [String] {
-        switch self {
-        case .nodejs, .react, .vue, .angular, .nextjs, .nuxt, .gatsby:
-            return ["Node.js", "npm"]
-        case .dotnet, .aspnet:
-            return [".NET SDK"]
-        case .python, .flask, .django, .fastapi:
-            return ["Python 3.x", "pip"]
-        case .ruby, .rails:
-            return ["Ruby", "gem"]
-        case .php, .laravel:
-            return ["PHP", "Composer"]
-        case .go:
-            return ["Go"]
-        case .rust:
-            return ["Rust", "Cargo"]
-        case .java, .spring:
-            return ["Java JDK", "Maven/Gradle"]
-        case .static:
-            return ["Web Server"]
-        case .hugo:
-            return ["Hugo"]
-        case .jekyll:
-            return ["Ruby", "Jekyll"]
-        }
-    }
-    
-    var defaultPort: Int {
-        switch self {
-        case .nodejs, .react, .nextjs, .nuxt, .gatsby:
-            return 3000
-        case .vue:
-            return 8080
-        case .angular:
-            return 4200
-        case .dotnet, .aspnet:
-            return 5000
-        case .python, .flask, .fastapi:
-            return 5000
-        case .django:
-            return 8000
-        case .ruby, .rails:
-            return 3000
-        case .php, .laravel:
-            return 8000
-        case .go:
-            return 8080
-        case .rust:
-            return 8000
-        case .java, .spring:
-            return 8080
-        case .static:
-            return 8000
-        case .hugo:
-            return 1313
-        case .jekyll:
-            return 4000
-        }
-    }
 }
 
 enum ProjectStatus: String, Codable {
-    case stopped = "Stopped"
-    case starting = "Starting"
-    case running = "Running"
-    case stopping = "Stopping"
-    case error = "Error"
-    
-    var color: Color {
-        switch self {
-        case .stopped:
-            return .gray
-        case .starting:
-            return .orange
-        case .running:
-            return .green
-        case .stopping:
-            return .orange
-        case .error:
-            return .red
-        }
-    }
+    case stopped = "stopped"
+    case starting = "starting"
+    case running = "running"
+    case stopping = "stopping"
+    case error = "error"
 }
 
-// MARK: - Project Manager
+// MARK: - Optimized ProjectManager
 
 class ProjectManager: ObservableObject {
     @Published var projects: [Project] = []
-    private let serverManager = ServerManager()
-    private let portForwardingManager = PortForwardingManager()
-    private let networkManager = NetworkManager.shared
+    
+    // Performance optimizations
+    private var projectsDict: [UUID: Project] = [:]
+    private var projectsByPort: [Int: UUID] = [:]
+    private var projectsByPath: [String: UUID] = [:]
     
     private let userDefaults = UserDefaults.standard
     private let projectsKey = "SavedProjects"
     
+    // Dependencies
+    private let serverManager = ServerManager()
+    private let networkManager = NetworkManager.shared
+    private let portForwardingManager = PortForwardingManager.shared
+    
+    // Performance optimization: Debouncing and caching
+    private var cancellables = Set<AnyCancellable>()
+    private let saveSubject = PassthroughSubject<Void, Never>()
+    private let fileQueue = DispatchQueue(label: "ProjectFileManager", qos: .utility)
+    
+    // Status monitoring
+    private var statusUpdateTimer: Timer?
+    private let statusUpdateInterval: TimeInterval = 2.0
+    
     init() {
+        setupDebouncedSave()
         loadProjects()
-        setupPortForwarding()
+        setupStatusMonitoring()
+    }
+    
+    deinit {
+        cancellables.removeAll()
+        statusUpdateTimer?.invalidate()
+    }
+    
+    // MARK: - Setup and Configuration
+    
+    private func setupDebouncedSave() {
+        saveSubject
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.saveProjectsAsync()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func setupStatusMonitoring() {
+        statusUpdateTimer = Timer.scheduledTimer(withTimeInterval: statusUpdateInterval, repeats: true) { [weak self] _ in
+            self?.updateRunningProjectsStatus()
+        }
     }
     
     // MARK: - Project Management
     
     func addProject(_ project: Project) {
-        var newProject = project
+        let optimizedProject = Project(
+            name: project.name,
+            path: project.path,
+            type: project.type,
+            port: findAvailablePort(startingFrom: project.port),
+            startCommand: project.startCommand.isEmpty ? project.type.defaultStartCommand : project.startCommand
+        )
         
-        // Ensure unique port
-        if projects.contains(where: { $0.port == project.port }) {
-            newProject.port = findAvailablePort(startingFrom: project.port)
-        }
+        projects.append(optimizedProject)
+        updateIndices(for: optimizedProject)
+        triggerSave()
+    }
+    
+    func updateProject(_ project: Project) {
+        guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
         
-        projects.append(newProject)
-        saveProjects()
+        // Remove from old indices
+        removeFromIndices(projects[index])
+        
+        // Update project
+        projects[index] = project
+        
+        // Update indices
+        updateIndices(for: project)
+        triggerSave()
     }
     
     func deleteProject(_ project: Project) {
+        // Stop server if running
         if project.status == .running {
             stopServer(for: project)
         }
         
+        // Remove from arrays and indices
         projects.removeAll { $0.id == project.id }
-        saveProjects()
+        removeFromIndices(project)
+        triggerSave()
     }
     
-    func updateProject(_ project: Project) {
-        if let index = projects.firstIndex(where: { $0.id == project.id }) {
-            projects[index] = project
-            saveProjects()
-        }
+    func getProject(by id: UUID) -> Project? {
+        return projectsDict[id]
+    }
+    
+    func getProject(by port: Int) -> Project? {
+        guard let id = projectsByPort[port] else { return nil }
+        return projectsDict[id]
+    }
+    
+    func getProject(by path: String) -> Project? {
+        guard let id = projectsByPath[path] else { return nil }
+        return projectsDict[id]
+    }
+    
+    func getRunningProjects() -> [Project] {
+        return projects.filter { $0.status == .running }
     }
     
     // MARK: - Server Management
@@ -292,22 +310,29 @@ class ProjectManager: ObservableObject {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
         
         projects[index].status = .starting
+        updateIndices(for: projects[index])
         
         Task {
             do {
                 let processId = try await serverManager.startServer(for: projects[index])
                 
                 await MainActor.run {
-                    projects[index].processId = processId
-                    projects[index].status = .running
-                    projects[index].lastStarted = Date()
-                    
-                    // Setup port forwarding
-                    setupPortForwardingForProject(projects[index])
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].processId = processId
+                        self.projects[currentIndex].status = .running
+                        self.projects[currentIndex].lastStarted = Date()
+                        
+                        // Setup port forwarding
+                        self.setupPortForwardingForProject(self.projects[currentIndex])
+                        self.updateIndices(for: self.projects[currentIndex])
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    projects[index].status = .error
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].status = .error
+                        self.updateIndices(for: self.projects[currentIndex])
+                    }
                 }
             }
         }
@@ -317,22 +342,29 @@ class ProjectManager: ObservableObject {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
         
         projects[index].status = .stopping
+        updateIndices(for: projects[index])
         
         Task {
             do {
                 try await serverManager.stopServer(for: projects[index])
                 
                 await MainActor.run {
-                    projects[index].processId = nil
-                    projects[index].status = .stopped
-                    projects[index].lastStopped = Date()
-                    
-                    // Remove port forwarding
-                    portForwardingManager.removePortForwarding(for: projects[index].port)
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].processId = nil
+                        self.projects[currentIndex].status = .stopped
+                        self.projects[currentIndex].lastStopped = Date()
+                        
+                        // Remove port forwarding
+                        self.portForwardingManager.removePortForwarding(for: self.projects[currentIndex].port)
+                        self.updateIndices(for: self.projects[currentIndex])
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    projects[index].status = .error
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].status = .error
+                        self.updateIndices(for: self.projects[currentIndex])
+                    }
                 }
             }
         }
@@ -341,8 +373,12 @@ class ProjectManager: ObservableObject {
     func restartServer(for project: Project) {
         stopServer(for: project)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            self.startServer(for: project)
+        // Use async delay instead of DispatchQueue
+        Task {
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            await MainActor.run {
+                self.startServer(for: project)
+            }
         }
     }
     
@@ -352,7 +388,7 @@ class ProjectManager: ObservableObject {
         var currentPort = port
         
         while currentPort <= 3300 {
-            if !projects.contains(where: { $0.port == currentPort }) {
+            if projectsByPort[currentPort] == nil {
                 return currentPort
             }
             currentPort += 1
@@ -368,33 +404,189 @@ class ProjectManager: ObservableObject {
         if let externalIP = networkManager.externalIPAddress {
             if let index = projects.firstIndex(where: { $0.id == project.id }) {
                 projects[index].externalURL = "http://\(externalIP):\(project.port)"
+                updateIndices(for: projects[index])
             }
         }
     }
     
-    private func setupPortForwarding() {
-        // Setup initial port forwarding configuration
-        portForwardingManager.configureFirewall()
+    // MARK: - Status Monitoring
+    
+    private func updateRunningProjectsStatus() {
+        let runningProjects = getRunningProjects()
+        
+        Task {
+            for project in runningProjects {
+                await checkProjectStatus(project)
+            }
+        }
+    }
+    
+    private func checkProjectStatus(_ project: Project) async {
+        guard let processId = project.processId else { return }
+        
+        // Check if process is still running
+        let isRunning = kill(processId, 0) == 0
+        
+        await MainActor.run {
+            if !isRunning {
+                if let index = self.projects.firstIndex(where: { $0.id == project.id }) {
+                    self.projects[index].status = .stopped
+                    self.projects[index].processId = nil
+                    self.projects[index].lastStopped = Date()
+                    self.updateIndices(for: self.projects[index])
+                }
+            }
+        }
+    }
+    
+    // MARK: - Index Management
+    
+    private func updateIndices(for project: Project) {
+        projectsDict[project.id] = project
+        projectsByPort[project.port] = project.id
+        projectsByPath[project.path] = project.id
+    }
+    
+    private func removeFromIndices(_ project: Project) {
+        projectsDict.removeValue(forKey: project.id)
+        projectsByPort.removeValue(forKey: project.port)
+        projectsByPath.removeValue(forKey: project.path)
+    }
+    
+    private func rebuildIndices() {
+        projectsDict.removeAll()
+        projectsByPort.removeAll()
+        projectsByPath.removeAll()
+        
+        for project in projects {
+            updateIndices(for: project)
+        }
     }
     
     // MARK: - Persistence
     
-    private func saveProjects() {
-        do {
-            let data = try JSONEncoder().encode(projects)
-            userDefaults.set(data, forKey: projectsKey)
-        } catch {
-            print("Failed to save projects: \(error)")
+    private func triggerSave() {
+        saveSubject.send()
+    }
+    
+    private func saveProjectsAsync() {
+        Task {
+            await saveProjects()
+        }
+    }
+    
+    private func saveProjects() async {
+        let projectsToSave = await MainActor.run { projects }
+        
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                do {
+                    let data = try JSONEncoder().encode(projectsToSave)
+                    await MainActor.run {
+                        self.userDefaults.set(data, forKey: self.projectsKey)
+                    }
+                } catch {
+                    print("Failed to save projects: \(error)")
+                }
+            }
         }
     }
     
     private func loadProjects() {
-        guard let data = userDefaults.data(forKey: projectsKey) else { return }
-        
-        do {
-            projects = try JSONDecoder().decode([Project].self, from: data)
-        } catch {
-            print("Failed to load projects: \(error)")
+        Task {
+            await loadProjectsAsync()
         }
+    }
+    
+    private func loadProjectsAsync() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                guard let data = await MainActor.run({ self.userDefaults.data(forKey: self.projectsKey) }) else { return }
+                
+                do {
+                    let loadedProjects = try JSONDecoder().decode([Project].self, from: data)
+                    await MainActor.run {
+                        self.projects = loadedProjects
+                        self.rebuildIndices()
+                    }
+                } catch {
+                    print("Failed to load projects: \(error)")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Utilities
+    
+    func validateProjectPath(_ path: String) -> Bool {
+        return FileManager.default.fileExists(atPath: path)
+    }
+    
+    func detectProjectType(at path: String) -> ProjectType? {
+        let fileManager = FileManager.default
+        
+        // Check for specific files that indicate project type
+        if fileManager.fileExists(atPath: "\(path)/package.json") {
+            if fileManager.fileExists(atPath: "\(path)/next.config.js") {
+                return .nextjs
+            } else if fileManager.fileExists(atPath: "\(path)/nuxt.config.js") {
+                return .nuxt
+            } else if fileManager.fileExists(atPath: "\(path)/angular.json") {
+                return .angular
+            } else if fileManager.fileExists(atPath: "\(path)/vue.config.js") {
+                return .vue
+            }
+            return .nodejs
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/requirements.txt") || fileManager.fileExists(atPath: "\(path)/setup.py") {
+            return .python
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/Gemfile") {
+            return .ruby
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/composer.json") {
+            return .php
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/go.mod") {
+            return .go
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/Cargo.toml") {
+            return .rust
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/pom.xml") || fileManager.fileExists(atPath: "\(path)/build.gradle") {
+            return .java
+        }
+        
+        if fileManager.fileExists(atPath: "\(path)/*.csproj") || fileManager.fileExists(atPath: "\(path)/*.sln") {
+            return .dotnet
+        }
+        
+        return nil
+    }
+}
+
+// MARK: - Extensions
+
+extension ProjectManager {
+    var totalProjects: Int {
+        projects.count
+    }
+    
+    var runningProjectsCount: Int {
+        projects.lazy.filter { $0.status == .running }.count
+    }
+    
+    var stoppedProjectsCount: Int {
+        projects.lazy.filter { $0.status == .stopped }.count
+    }
+    
+    var errorProjectsCount: Int {
+        projects.lazy.filter { $0.status == .error }.count
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import SystemConfiguration
+import Combine
 
 class NetworkManager: ObservableObject {
     static let shared = NetworkManager()
@@ -11,45 +12,108 @@ class NetworkManager: ObservableObject {
     @Published var isConnectedToInternet = false
     
     private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "NetworkMonitor")
+    private let queue = DispatchQueue(label: "NetworkMonitor", qos: .utility)
+    private var cancellables = Set<AnyCancellable>()
+    
+    // Performance optimization: Cache and debouncing
+    private var lastLocalIPUpdate: Date = Date.distantPast
+    private var lastExternalIPUpdate: Date = Date.distantPast
+    private var lastInterfaceUpdate: Date = Date.distantPast
+    private let updateInterval: TimeInterval = 5.0 // Minimum time between updates
+    private var cachedExternalIP: String?
+    private var externalIPCacheExpiry: Date = Date.distantPast
+    
+    // Debouncing subjects
+    private let networkUpdateSubject = PassthroughSubject<Void, Never>()
+    private let ipUpdateSubject = PassthroughSubject<Void, Never>()
     
     private init() {
         setupNetworkMonitoring()
+        setupDebouncedUpdates()
         updateNetworkInfo()
+    }
+    
+    deinit {
+        monitor.cancel()
+        cancellables.removeAll()
     }
     
     // MARK: - Network Monitoring
     
     private func setupNetworkMonitoring() {
         monitor.pathUpdateHandler = { [weak self] path in
+            guard let self = self else { return }
+            
             DispatchQueue.main.async {
-                self?.isConnectedToInternet = path.status == .satisfied
-                self?.updateNetworkInfo()
+                let wasConnected = self.isConnectedToInternet
+                self.isConnectedToInternet = path.status == .satisfied
+                
+                // Only update network info if connection status changed
+                if wasConnected != self.isConnectedToInternet {
+                    self.networkUpdateSubject.send()
+                }
             }
         }
         
         monitor.start(queue: queue)
     }
     
+    private func setupDebouncedUpdates() {
+        // Debounce network updates to avoid excessive refreshes
+        networkUpdateSubject
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateNetworkInfo()
+            }
+            .store(in: &cancellables)
+        
+        // Debounce IP updates separately
+        ipUpdateSubject
+            .debounce(for: .seconds(2), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateIPAddresses()
+            }
+            .store(in: &cancellables)
+    }
+    
     private func updateNetworkInfo() {
+        let now = Date()
+        
+        // Rate limiting: Only update if enough time has passed
+        guard now.timeIntervalSince(lastLocalIPUpdate) >= updateInterval else {
+            return
+        }
+        
         Task {
             await updateLocalIPAddress()
             await updateExternalIPAddress()
             await updateNetworkInterfaces()
+            
+            await MainActor.run {
+                self.lastLocalIPUpdate = now
+            }
+        }
+    }
+    
+    private func updateIPAddresses() {
+        Task {
+            await updateLocalIPAddress()
+            await updateExternalIPAddress()
         }
     }
     
     // MARK: - IP Address Management
     
     private func updateLocalIPAddress() async {
-        if let ip = getLocalIPAddress() {
+        // Use cached result if available and recent
+        if let ip = getLocalIPAddressCached() {
             await MainActor.run {
                 self.localIPAddress = ip
             }
         }
     }
     
-    private func getLocalIPAddress() -> String? {
+    private func getLocalIPAddressCached() -> String? {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         
@@ -64,8 +128,8 @@ class NetworkManager: ObservableObject {
                 if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) {
                     let name = String(cString: interface.ifa_name)
                     
-                    // Skip loopback and other non-relevant interfaces
-                    if name.starts(with: "en") || name.starts(with: "wifi") {
+                    // Skip loopback and prioritize common network interfaces
+                    if name.hasPrefix("en") || name.hasPrefix("wifi") || name.hasPrefix("eth") {
                         var addr = interface.ifa_addr.pointee
                         var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                         
@@ -74,11 +138,11 @@ class NetworkManager: ObservableObject {
                                       nil, socklen_t(0), NI_NUMERICHOST) == 0 {
                             let ipString = String(cString: hostname)
                             
-                            // Prefer IPv4 addresses
-                            if addrFamily == UInt8(AF_INET) {
+                            // Prefer IPv4 addresses and skip link-local addresses
+                            if addrFamily == UInt8(AF_INET) && !ipString.hasPrefix("169.254") {
                                 address = ipString
                                 break
-                            } else if address == nil {
+                            } else if address == nil && !ipString.hasPrefix("fe80") {
                                 address = ipString
                             }
                         }
@@ -92,51 +156,89 @@ class NetworkManager: ObservableObject {
     }
     
     private func updateExternalIPAddress() async {
+        let now = Date()
+        
+        // Use cached external IP if still valid
+        if let cached = cachedExternalIP, now < externalIPCacheExpiry {
+            await MainActor.run {
+                self.externalIPAddress = cached
+            }
+            return
+        }
+        
+        // Rate limiting for external IP requests
+        guard now.timeIntervalSince(lastExternalIPUpdate) >= 30.0 else {
+            return
+        }
+        
         do {
             let ip = try await fetchExternalIPAddress()
             await MainActor.run {
                 self.externalIPAddress = ip
+                self.cachedExternalIP = ip
+                self.externalIPCacheExpiry = now.addingTimeInterval(300) // Cache for 5 minutes
+                self.lastExternalIPUpdate = now
             }
         } catch {
-            print("Failed to fetch external IP: \(error)")
+            // Silently fail for external IP - not critical
+            await MainActor.run {
+                self.lastExternalIPUpdate = now
+            }
         }
     }
     
     private func fetchExternalIPAddress() async throws -> String {
-        let urls = [
-            "https://ipinfo.io/ip",
+        // Use multiple services for reliability
+        let services = [
             "https://api.ipify.org",
-            "https://ifconfig.me/ip",
+            "https://checkip.amazonaws.com",
             "https://icanhazip.com"
         ]
         
-        for urlString in urls {
+        for service in services {
             do {
-                guard let url = URL(string: urlString) else { continue }
-                let (data, _) = try await URLSession.shared.data(from: url)
+                guard let url = URL(string: service) else { continue }
                 
-                if let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let ipString = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if let ip = ipString, isValidIPAddress(ip) {
                     return ip
                 }
             } catch {
-                continue // Try next URL
+                // Try next service
+                continue
             }
         }
         
-        throw NetworkError.failedToFetchExternalIP
+        throw NetworkError.externalIPUnavailable
     }
     
-    // MARK: - Network Interface Management
-    
-    private func updateNetworkInterfaces() async {
-        let interfaces = getNetworkInterfaces()
-        
-        await MainActor.run {
-            self.networkInterfaces = interfaces
+    private func isValidIPAddress(_ ip: String) -> Bool {
+        // Basic IP validation
+        let components = ip.components(separatedBy: ".")
+        return components.count == 4 && components.allSatisfy { component in
+            guard let num = Int(component) else { return false }
+            return num >= 0 && num <= 255
         }
     }
     
-    private func getNetworkInterfaces() -> [NetworkInterface] {
+    private func updateNetworkInterfaces() async {
+        let now = Date()
+        
+        // Rate limiting for interface updates
+        guard now.timeIntervalSince(lastInterfaceUpdate) >= updateInterval else {
+            return
+        }
+        
+        let interfaces = await getNetworkInterfaces()
+        await MainActor.run {
+            self.networkInterfaces = interfaces
+            self.lastInterfaceUpdate = now
+        }
+    }
+    
+    private func getNetworkInterfaces() async -> [NetworkInterface] {
         var interfaces: [NetworkInterface] = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         
@@ -146,25 +248,31 @@ class NetworkManager: ObservableObject {
                 defer { ptr = ptr?.pointee.ifa_next }
                 
                 guard let interface = ptr?.pointee else { continue }
-                let addrFamily = interface.ifa_addr.pointee.sa_family
+                let name = String(cString: interface.ifa_name)
                 
-                if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) {
-                    let name = String(cString: interface.ifa_name)
+                // Skip loopback and system interfaces
+                guard !name.hasPrefix("lo") && !name.hasPrefix("utun") else {
+                    continue
+                }
+                
+                if interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
                     var addr = interface.ifa_addr.pointee
                     var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
                     
                     if getnameinfo(&addr, socklen_t(interface.ifa_addr.pointee.sa_len),
                                   &hostname, socklen_t(hostname.count),
                                   nil, socklen_t(0), NI_NUMERICHOST) == 0 {
-                        let ipAddress = String(cString: hostname)
+                        let ipString = String(cString: hostname)
+                        let isActive = (interface.ifa_flags & UInt32(IFF_UP)) != 0 && 
+                                      (interface.ifa_flags & UInt32(IFF_RUNNING)) != 0
                         
+                        let interfaceType = determineInterfaceType(name)
                         let networkInterface = NetworkInterface(
                             name: name,
-                            ipAddress: ipAddress,
-                            type: getInterfaceType(name),
-                            isActive: (interface.ifa_flags & UInt32(IFF_UP)) != 0
+                            ipAddress: ipString,
+                            isActive: isActive,
+                            type: interfaceType
                         )
-                        
                         interfaces.append(networkInterface)
                     }
                 }
@@ -175,204 +283,63 @@ class NetworkManager: ObservableObject {
         return interfaces
     }
     
-    private func getInterfaceType(_ name: String) -> InterfaceType {
-        if name.starts(with: "en") {
+    private func determineInterfaceType(_ name: String) -> InterfaceType {
+        if name.hasPrefix("en") && name.contains("eth") {
             return .ethernet
-        } else if name.starts(with: "wi") || name.starts(with: "wl") {
+        } else if name.hasPrefix("en") || name.hasPrefix("wifi") {
             return .wifi
-        } else if name.starts(with: "lo") {
-            return .loopback
-        } else if name.starts(with: "utun") || name.starts(with: "tun") {
+        } else if name.hasPrefix("ppp") || name.hasPrefix("utun") {
             return .vpn
         } else {
             return .other
         }
     }
     
-    // MARK: - Port Scanning
+    // MARK: - Public Methods
     
-    func scanPort(_ port: Int, on host: String = "localhost") async -> Bool {
-        return await withCheckedContinuation { continuation in
-            let connection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(integerLiteral: UInt16(port)), using: .tcp)
-            
-            connection.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    connection.cancel()
-                    continuation.resume(returning: true)
-                case .failed(_):
-                    continuation.resume(returning: false)
-                default:
-                    break
-                }
-            }
-            
-            connection.start(queue: queue)
-            
-            // Timeout after 3 seconds
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
-                connection.cancel()
-                continuation.resume(returning: false)
-            }
-        }
+    func refreshNetworkInfo() {
+        ipUpdateSubject.send()
     }
     
-    func scanPortRange(_ range: ClosedRange<Int>, on host: String = "localhost") async -> [Int] {
-        var openPorts: [Int] = []
+    func isPortOpen(_ port: Int) async -> Bool {
+        let sockfd = socket(AF_INET, SOCK_STREAM, 0)
+        defer { close(sockfd) }
         
-        await withTaskGroup(of: (Int, Bool).self) { group in
-            for port in range {
-                group.addTask {
-                    let isOpen = await self.scanPort(port, on: host)
-                    return (port, isOpen)
-                }
-            }
-            
-            for await (port, isOpen) in group {
-                if isOpen {
-                    openPorts.append(port)
-                }
-            }
-        }
+        guard sockfd != -1 else { return false }
         
-        return openPorts.sorted()
-    }
-    
-    // MARK: - Network Utilities
-    
-    func getNetworkSpeed() async -> NetworkSpeed {
-        // Simulate network speed test
-        let startTime = Date()
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(port).bigEndian
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
         
-        do {
-            let url = URL(string: "https://httpbin.org/bytes/1024")!
-            let (_, _) = try await URLSession.shared.data(from: url)
-            
-            let endTime = Date()
-            let duration = endTime.timeIntervalSince(startTime)
-            let speed = 1024.0 / duration // bytes per second
-            
-            return NetworkSpeed(
-                downloadSpeed: speed,
-                uploadSpeed: speed * 0.8, // Estimate upload as 80% of download
-                ping: duration * 1000 // Convert to milliseconds
-            )
-        } catch {
-            return NetworkSpeed(downloadSpeed: 0, uploadSpeed: 0, ping: 0)
-        }
-    }
-    
-    func pingHost(_ host: String) async -> PingResult {
-        let task = Process()
-        let pipe = Pipe()
-        
-        task.executableURL = URL(fileURLWithPath: "/sbin/ping")
-        task.arguments = ["-c", "4", host]
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        let startTime = Date()
-        
-        do {
-            try task.run()
-            task.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            
-            let endTime = Date()
-            let duration = endTime.timeIntervalSince(startTime)
-            
-            return PingResult(
-                host: host,
-                isReachable: task.terminationStatus == 0,
-                averageTime: duration * 1000, // Convert to milliseconds
-                output: output
-            )
-        } catch {
-            return PingResult(
-                host: host,
-                isReachable: false,
-                averageTime: 0,
-                output: error.localizedDescription
-            )
-        }
-    }
-    
-    // MARK: - DNS Management
-    
-    func resolveDNS(_ hostname: String) async -> [String] {
-        return await withCheckedContinuation { continuation in
-            let host = CFHostCreateWithName(nil, hostname as CFString).takeRetainedValue()
-            
-            CFHostStartInfoResolution(host, .addresses, nil)
-            
-            var success: DarwinBoolean = false
-            if let addresses = CFHostGetAddressing(host, &success)?.takeUnretainedValue() as? [Data] {
-                let ipAddresses = addresses.compactMap { data -> String? in
-                    return data.withUnsafeBytes { bytes in
-                        let sockaddr = bytes.bindMemory(to: sockaddr.self).first!
-                        var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                        
-                        if getnameinfo(&sockaddr, socklen_t(data.count),
-                                      &hostname, socklen_t(hostname.count),
-                                      nil, 0, NI_NUMERICHOST) == 0 {
-                            return String(cString: hostname)
-                        }
-                        return nil
-                    }
-                }
-                continuation.resume(returning: ipAddresses)
-            } else {
-                continuation.resume(returning: [])
+        let result = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                connect(sockfd, sockPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
+        
+        return result == 0
     }
 }
 
-// MARK: - Supporting Types
+// MARK: - Data Models
 
 struct NetworkInterface {
     let name: String
     let ipAddress: String
-    let type: InterfaceType
     let isActive: Bool
+    let type: InterfaceType
 }
 
-enum InterfaceType: String, CaseIterable {
-    case ethernet = "Ethernet"
-    case wifi = "Wi-Fi"
-    case loopback = "Loopback"
-    case vpn = "VPN"
-    case other = "Other"
+enum InterfaceType {
+    case ethernet
+    case wifi
+    case vpn
+    case other
 }
 
-struct NetworkSpeed {
-    let downloadSpeed: Double // bytes per second
-    let uploadSpeed: Double // bytes per second
-    let ping: Double // milliseconds
-}
-
-struct PingResult {
-    let host: String
-    let isReachable: Bool
-    let averageTime: Double // milliseconds
-    let output: String
-}
-
-enum NetworkError: Error, LocalizedError {
-    case failedToFetchExternalIP
-    case invalidHost
-    case connectionTimeout
-    
-    var errorDescription: String? {
-        switch self {
-        case .failedToFetchExternalIP:
-            return "Failed to fetch external IP address"
-        case .invalidHost:
-            return "Invalid host"
-        case .connectionTimeout:
-            return "Connection timeout"
-        }
-    }
+enum NetworkError: Error {
+    case externalIPUnavailable
+    case invalidResponse
+    case connectionFailed
 }
