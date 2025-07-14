@@ -182,7 +182,7 @@
 				2B1234567890ABD7 /* NetworkManager.swift in Sources */,
 				2B1234567890ABD9 /* ProjectSettingsView.swift in Sources */,
 				2B1234567890ABDB /* StatusView.swift in Sources */,
-				2B1234567890ABC7 /* DevServerManagerApp.swift in Sources */,
+				2B1234567890ABCD /* DevServerManagerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
