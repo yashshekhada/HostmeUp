@@ -20,11 +20,12 @@ class PortForwardingManager: ObservableObject {
         
         portForwardingRules.append(rule)
         
-        // Configure firewall rule
-        configureFirewallRule(for: rule)
-        
-        // Setup UPnP if available
-        setupUPnPPortForwarding(for: rule)
+        // Request admin permissions first
+        requestAdminPermissions { [weak self] success in
+            if success {
+                self?.configureGlobalAccess(for: rule)
+            }
+        }
     }
     
     func removePortForwarding(for port: Int) {
@@ -239,7 +240,7 @@ class PortForwardingManager: ObservableObject {
         }
     }
     
-    func requestAdminPermissions() {
+    func requestAdminPermissions(completion: @escaping (Bool) -> Void) {
         // Request admin permissions for firewall configuration
         let script = """
             #!/bin/bash
@@ -248,7 +249,113 @@ class PortForwardingManager: ObservableObject {
             osascript -e 'do shell script "echo Admin permissions requested" with administrator privileges'
             """
         
-        executeScript(script)
+        executeScriptWithPermissions(script, description: "Request Admin Permissions") { success in
+            completion(success)
+        }
+    }
+    
+    private func configureGlobalAccess(for rule: PortForwardingRule) {
+        // Configure firewall rule
+        configureFirewallRule(for: rule)
+        
+        // Setup UPnP if available
+        setupUPnPPortForwarding(for: rule)
+        
+        // Configure macOS Application Firewall
+        configureMacOSApplicationFirewall()
+        
+        // Setup network sharing if needed
+        configureNetworkSharing(for: rule)
+    }
+    
+    private func configureMacOSApplicationFirewall() {
+        let script = """
+            #!/bin/bash
+            
+            # Get the path to our application
+            APP_PATH="$(dirname "$(dirname "$(dirname "$(pwd)")")")"
+            
+            echo "Configuring macOS Application Firewall for DevServer Manager..."
+            
+            # Add our application to the firewall exceptions
+            sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$APP_PATH"
+            sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$APP_PATH"
+            
+            # Allow incoming connections for development servers
+            sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setallowsigned on
+            sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setallowsignedapp on
+            
+            # Enable stealth mode (optional - you can disable this)
+            # sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode off
+            
+            echo "Firewall configuration completed!"
+            """
+        
+        executeScriptWithPermissions(script, description: "Configure Application Firewall") { success in
+            if success {
+                print("Application Firewall configured successfully")
+            }
+        }
+    }
+    
+    private func configureNetworkSharing(for rule: PortForwardingRule) {
+        let script = """
+            #!/bin/bash
+            
+            echo "Setting up network sharing for port \(rule.localPort)..."
+            
+            # Enable IP forwarding
+            sudo sysctl -w net.inet.ip.forwarding=1
+            
+            # Add pf rules for port forwarding
+            cat << EOF | sudo tee /tmp/devserver_pf.conf
+            # DevServer Manager Port Forwarding Rules
+            rdr pass inet proto tcp from any to any port \(rule.localPort) -> 127.0.0.1 port \(rule.localPort)
+            pass in inet proto tcp from any to any port \(rule.localPort)
+            pass out inet proto tcp from any to any port \(rule.localPort)
+            EOF
+            
+            # Load the rules
+            sudo pfctl -f /tmp/devserver_pf.conf
+            sudo pfctl -e
+            
+            echo "Network sharing configured for port \(rule.localPort)"
+            """
+        
+        executeScriptWithPermissions(script, description: "Configure Network Sharing") { success in
+            if success {
+                print("Network sharing configured for port \(rule.localPort)")
+            }
+        }
+    }
+    
+    private func executeScriptWithPermissions(_ script: String, description: String, completion: @escaping (Bool) -> Void) {
+        let task = Process()
+        let pipe = Pipe()
+        
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = ["-c", script]
+        task.standardOutput = pipe
+        task.standardError = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            
+            if task.terminationStatus != 0 {
+                print("Script execution failed: \(output)")
+                completion(false)
+            } else {
+                print("Script execution successful: \(output)")
+                completion(true)
+            }
+        } catch {
+            print("Failed to execute script with permissions: \(error)")
+            completion(false)
+        }
     }
 }
 

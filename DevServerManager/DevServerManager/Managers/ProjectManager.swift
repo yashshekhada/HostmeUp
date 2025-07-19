@@ -16,14 +16,62 @@ struct Project: Identifiable, Codable, Hashable {
     var prerequisites: [String] = []
     var lastStarted: Date? = nil
     var lastStopped: Date? = nil
+    var buildConfiguration: BuildConfiguration = .release
+    var useDLLExecution: Bool = true
+    var customDLLPath: String? = nil
     
-    init(name: String, path: String, type: ProjectType, port: Int, startCommand: String) {
+    init(name: String, path: String, type: ProjectType, port: Int, startCommand: String, buildConfiguration: BuildConfiguration = .release, useDLLExecution: Bool = true) {
         self.name = name
         self.path = path
         self.type = type
         self.port = port
         self.startCommand = startCommand
         self.prerequisites = type.prerequisites
+        self.buildConfiguration = buildConfiguration
+        self.useDLLExecution = useDLLExecution
+    }
+    
+    // Computed property to get the actual execution command based on configuration
+    var effectiveStartCommand: String {
+        if useDLLExecution && (type == .dotnet || type == .aspnet) {
+            return generateDLLCommand()
+        }
+        return startCommand
+    }
+    
+    // Computed property to get the effective execution path
+    var effectiveExecutionPath: String {
+        if useDLLExecution && (type == .dotnet || type == .aspnet) {
+            return getDLLExecutionPath()
+        }
+        return path
+    }
+    
+    private func generateDLLCommand() -> String {
+        if let customPath = customDLLPath, !customPath.isEmpty {
+            return "dotnet \(customPath)"
+        }
+        
+        // Generate command based on build configuration
+        let configName = buildConfiguration.rawValue
+        let dllName = "\(name).dll"
+        return "dotnet \(dllName)"
+    }
+    
+    private func getDLLExecutionPath() -> String {
+        if let customPath = customDLLPath, !customPath.isEmpty {
+            return URL(fileURLWithPath: customPath).deletingLastPathComponent().path
+        }
+        
+        // Check if the path already points to a publish directory
+        if path.hasSuffix("/publish") || path.contains("/bin/Release/") || path.contains("/bin/Debug/") {
+            // Path is already pointing to compiled output, use as-is
+            return path
+        }
+        
+        // Generate path based on build configuration for source directories
+        let configName = buildConfiguration.rawValue
+        return "\(path)/bin/\(configName)/net9.0/publish"
     }
 }
 
@@ -240,6 +288,38 @@ enum ProjectStatus: String, Codable {
     }
 }
 
+enum BuildConfiguration: String, CaseIterable, Codable {
+    case debug = "Debug"
+    case release = "Release"
+    
+    var description: String {
+        switch self {
+        case .debug:
+            return "Debug - Development build with debug symbols"
+        case .release:
+            return "Release - Optimized production build"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .debug:
+            return "hammer"
+        case .release:
+            return "checkmark.seal"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .debug:
+            return .orange
+        case .release:
+            return .green
+        }
+    }
+}
+
 // MARK: - Project Manager
 
 class ProjectManager: ObservableObject {
@@ -291,24 +371,35 @@ class ProjectManager: ObservableObject {
     func startServer(for project: Project) {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
         
+        // Update status immediately on main thread
         projects[index].status = .starting
         
-        Task {
+        // Run server startup on background thread
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            
             do {
-                let processId = try await serverManager.startServer(for: projects[index])
+                let processId = try await self.serverManager.startServer(for: self.projects[index])
                 
                 await MainActor.run {
-                    projects[index].processId = processId
-                    projects[index].status = .running
-                    projects[index].lastStarted = Date()
-                    
-                    // Setup port forwarding
-                    setupPortForwardingForProject(projects[index])
+                    // Find the project again in case the array changed
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].processId = processId
+                        self.projects[currentIndex].status = .running
+                        self.projects[currentIndex].lastStarted = Date()
+                        
+                        // Setup port forwarding
+                        self.setupPortForwardingForProject(self.projects[currentIndex])
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    projects[index].status = .error
+                    // Find the project again in case the array changed
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].status = .error
+                    }
                 }
+                print("Failed to start server: \(error)")
             }
         }
     }
@@ -316,24 +407,35 @@ class ProjectManager: ObservableObject {
     func stopServer(for project: Project) {
         guard let index = projects.firstIndex(where: { $0.id == project.id }) else { return }
         
+        // Update status immediately on main thread
         projects[index].status = .stopping
         
-        Task {
+        // Run server stop on background thread
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            
             do {
-                try await serverManager.stopServer(for: projects[index])
+                try await self.serverManager.stopServer(for: project)
                 
                 await MainActor.run {
-                    projects[index].processId = nil
-                    projects[index].status = .stopped
-                    projects[index].lastStopped = Date()
-                    
-                    // Remove port forwarding
-                    portForwardingManager.removePortForwarding(for: projects[index].port)
+                    // Find the project again in case the array changed
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].processId = nil
+                        self.projects[currentIndex].status = .stopped
+                        self.projects[currentIndex].lastStopped = Date()
+                        
+                        // Remove port forwarding
+                        self.portForwardingManager.removePortForwarding(for: self.projects[currentIndex].port)
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    projects[index].status = .error
+                    // Find the project again in case the array changed
+                    if let currentIndex = self.projects.firstIndex(where: { $0.id == project.id }) {
+                        self.projects[currentIndex].status = .error
+                    }
                 }
+                print("Failed to stop server: \(error)")
             }
         }
     }

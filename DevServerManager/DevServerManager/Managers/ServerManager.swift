@@ -13,58 +13,120 @@ class ServerManager: ObservableObject {
             return existingProcess.processIdentifier
         }
         
-        // Validate project path
-        guard FileManager.default.fileExists(atPath: project.path) else {
-            throw ServerError.invalidPath
+        // Run all potentially blocking operations on background thread
+        return try await withCheckedThrowingContinuation { continuation in
+            Task.detached {
+                do {
+                    // Use effective execution path instead of project path
+                    let executionPath = project.effectiveExecutionPath
+                    
+                    // Validate project path on background thread
+                    guard FileManager.default.fileExists(atPath: executionPath) else {
+                        continuation.resume(throwing: ServerError.invalidPath)
+                        return
+                    }
+                    
+                    // For .NET applications, we'll let them use their default port if needed
+                    // and detect what port they actually bind to
+                    
+                    // Create process on background thread
+                    let process = Process()
+                    let outputPipe = Pipe()
+                    let errorPipe = Pipe()
+                    
+                    // Configure process
+                    process.currentDirectoryPath = executionPath
+                    process.standardOutput = outputPipe
+                    process.standardError = errorPipe
+                    
+                    // Use effective start command instead of project startCommand
+                    var commandComponents = self.parseCommand(project.effectiveStartCommand)
+                    guard let executable = commandComponents.first else {
+                        continuation.resume(throwing: ServerError.invalidCommand)
+                        return
+                    }
+                    
+                    // For .NET projects, ensure we use the full path to dotnet if needed
+                    if (project.type == .dotnet || project.type == .aspnet) && executable == "dotnet" {
+                        commandComponents[0] = "/usr/local/share/dotnet/dotnet"
+                    }
+                    
+                    // Special handling for .NET applications to ensure correct port
+                    if project.type == .dotnet || project.type == .aspnet {
+                        // Add port-specific arguments for .NET applications
+                        if project.useDLLExecution {
+                            // For DLL execution, add --urls parameter with network binding
+                            commandComponents.append("--urls")
+                            commandComponents.append("http://0.0.0.0:\(project.port);http://localhost:\(project.port);http://127.0.0.1:\(project.port)")
+                        } else {
+                            // For source code execution, add --urls parameter to dotnet run
+                            if commandComponents.contains("run") {
+                                commandComponents.append("--urls")
+                                commandComponents.append("http://0.0.0.0:\(project.port);http://localhost:\(project.port);http://127.0.0.1:\(project.port)")
+                            }
+                        }
+                    }
+                    
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    process.arguments = commandComponents
+                    
+                    // Setup environment
+                    var environment = ProcessInfo.processInfo.environment
+                    environment["PATH"] = "/usr/local/share/dotnet:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+                    environment["PORT"] = "\(project.port)"
+                    
+                    // ASP.NET Core specific environment variables
+                    if project.type == .dotnet || project.type == .aspnet {
+                        environment["ASPNETCORE_ENVIRONMENT"] = project.buildConfiguration == .debug ? "Development" : "Production"
+                        environment["DOTNET_ENVIRONMENT"] = project.buildConfiguration == .debug ? "Development" : "Production"
+                        environment["ASPNETCORE_URLS"] = "http://0.0.0.0:\(project.port);http://localhost:\(project.port);http://127.0.0.1:\(project.port)"
+                        environment["ASPNETCORE_HTTP_PORT"] = "\(project.port)"
+                    }
+                    
+                    process.environment = environment
+                    
+                    // Setup output monitoring
+                    await MainActor.run {
+                        self.setupOutputMonitoring(for: project.id, outputPipe: outputPipe, errorPipe: errorPipe)
+                    }
+                    
+                    // Start process on background thread
+                    try process.run()
+                    
+                    // Store process on main actor
+                    await MainActor.run {
+                        self.runningProcesses[project.id] = process
+                    }
+                    
+                    // Wait for process to start and check if it's actually listening
+                    try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds to let it fully start
+                    
+                    // Check if process is still running
+                    if !process.isRunning {
+                        // Process died, check output for error
+                        let output = await MainActor.run {
+                            self.processOutputs[project.id] ?? ""
+                        }
+                        print("Process died. Output: \(output)")
+                        continuation.resume(throwing: ServerError.failedToStart)
+                        return
+                    }
+                    
+                    // Verify the server is actually listening on some port
+                    let isListening = await self.checkIfServerIsListening(process: process)
+                    if !isListening {
+                        print("Process running but not listening on expected port")
+                        // Don't fail here - the server might be starting on a different port
+                        // which is common with .NET applications
+                    }
+                    
+                    continuation.resume(returning: process.processIdentifier)
+                    
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        
-        // Check if port is available
-        guard await isPortAvailable(project.port) else {
-            throw ServerError.portInUse
-        }
-        
-        // Create process
-        let process = Process()
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        
-        // Configure process
-        process.currentDirectoryPath = project.path
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-        
-        // Parse command
-        let commandComponents = parseCommand(project.startCommand)
-        guard let executable = commandComponents.first else {
-            throw ServerError.invalidCommand
-        }
-        
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = commandComponents
-        
-        // Setup environment
-        var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        environment["PORT"] = "\(project.port)"
-        process.environment = environment
-        
-        // Setup output monitoring
-        setupOutputMonitoring(for: project.id, outputPipe: outputPipe, errorPipe: errorPipe)
-        
-        // Start process
-        try process.run()
-        
-        // Store process
-        runningProcesses[project.id] = process
-        
-        // Wait a moment to ensure process started successfully
-        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-        
-        if !process.isRunning {
-            throw ServerError.failedToStart
-        }
-        
-        return process.processIdentifier
     }
     
     func stopServer(for project: Project) async throws {
@@ -103,16 +165,22 @@ class ServerManager: ObservableObject {
     }
     
     private func isPortAvailable(_ port: Int) async -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/lsof")
-        task.arguments = ["-i", ":\(port)"]
-        
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus != 0 // Port is available if lsof returns non-zero
-        } catch {
-            return true // Assume available if we can't check
+        return await withCheckedContinuation { continuation in
+            Task.detached {
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/lsof")
+                task.arguments = ["-i", ":\(port)"]
+                
+                do {
+                    try task.run()
+                    task.waitUntilExit()
+                    // Port is available if lsof returns non-zero (no process found)
+                    continuation.resume(returning: task.terminationStatus != 0)
+                } catch {
+                    // Assume available if we can't check
+                    continuation.resume(returning: true)
+                }
+            }
         }
     }
     
@@ -231,6 +299,37 @@ class ServerManager: ObservableObject {
         }
         
         return nil
+    }
+    
+    // New method to check if server is actually listening
+    private func checkIfServerIsListening(process: Process) async -> Bool {
+        // Check if the process is listening on any HTTP port
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/lsof")
+        task.arguments = ["-p", "\(process.processIdentifier)", "-i"]
+        
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            
+            // Check if output contains any HTTP ports (common web server ports)
+            let httpPorts = ["5000", "5001", "3000", "8000", "8080"]
+            for port in httpPorts {
+                if output.contains(":\(port)") {
+                    return true
+                }
+            }
+            
+            return task.terminationStatus == 0 && !output.isEmpty
+        } catch {
+            return false
+        }
     }
 }
 

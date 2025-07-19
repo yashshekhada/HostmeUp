@@ -5,13 +5,15 @@ struct DevServerManagerApp: App {
     @StateObject private var projectManager = ProjectManager()
     
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("DevServer Manager") {
             ContentView()
                 .environmentObject(projectManager)
-                .frame(minWidth: 1000, minHeight: 700)
+                .frame(minWidth: 1200, minHeight: 800)
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
+        .defaultPosition(.center)
+        .defaultSize(width: 1200, height: 800)
         
         Settings {
             SettingsView()

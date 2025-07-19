@@ -31,7 +31,7 @@ class NetworkManager: ObservableObject {
         monitor.start(queue: queue)
     }
     
-    private func updateNetworkInfo() {
+    func updateNetworkInfo() {
         Task {
             await updateLocalIPAddress()
             await updateExternalIPAddress()
