@@ -108,9 +108,9 @@ enum ProjectType: String, CaseIterable, Codable {
         case .dotnet, .aspnet:
             return "square.stack.3d.down.right"
         case .python, .flask, .django, .fastapi:
-            return "snake"
+            return "chevron.left.forwardslash.chevron.right"
         case .ruby, .rails:
-            return "gem"
+            return "diamond"
         case .php, .laravel:
             return "globe"
         case .go, .rust:

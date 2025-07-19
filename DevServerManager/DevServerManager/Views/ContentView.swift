@@ -20,6 +20,10 @@ struct ContentView: View {
                 
                 List(projectManager.projects, id: \.id, selection: $selectedProject) { project in
                     ProjectRowView(project: project)
+                        .tag(project)
+                        .onTapGesture {
+                            selectedProject = project
+                        }
                         .contextMenu {
                             Button("Edit") {
                                 selectedProject = project
