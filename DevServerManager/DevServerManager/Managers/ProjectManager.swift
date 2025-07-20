@@ -71,7 +71,14 @@ struct Project: Identifiable, Codable, Hashable {
         
         // Generate path based on build configuration for source directories
         let configName = buildConfiguration.rawValue
-        return "\(path)/bin/\(configName)/net9.0/publish"
+        let publishPath = "\(path)/bin/\(configName)/net9.0/publish"
+        
+        // Check if the publish directory exists, if not fall back to the original path
+        if FileManager.default.fileExists(atPath: publishPath) {
+            return publishPath
+        } else {
+            return path
+        }
     }
 }
 

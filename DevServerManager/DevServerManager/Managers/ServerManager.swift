@@ -48,7 +48,14 @@ class ServerManager: ObservableObject {
                     
                     // For .NET projects, ensure we use the full path to dotnet if needed
                     if (project.type == .dotnet || project.type == .aspnet) && executable == "dotnet" {
-                        commandComponents[0] = "/usr/local/share/dotnet/dotnet"
+                        // Check if dotnet is available in the standard location
+                        let dotnetPath = "/usr/local/share/dotnet/dotnet"
+                        if FileManager.default.fileExists(atPath: dotnetPath) {
+                            commandComponents[0] = dotnetPath
+                        } else {
+                            // Fallback to system PATH
+                            commandComponents[0] = "dotnet"
+                        }
                     }
                     
                     // Special handling for .NET applications to ensure correct port
@@ -72,7 +79,20 @@ class ServerManager: ObservableObject {
                     
                     // Setup environment
                     var environment = ProcessInfo.processInfo.environment
-                    environment["PATH"] = "/usr/local/share/dotnet:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"
+                    // Add common development tool paths to PATH
+                    let additionalPaths = [
+                        "/usr/local/share/dotnet",
+                        "/usr/local/bin", 
+                        "/usr/bin",
+                        "/bin",
+                        "/usr/sbin",
+                        "/sbin",
+                        "/opt/homebrew/bin",
+                        "/opt/homebrew/sbin"
+                    ]
+                    let currentPath = environment["PATH"] ?? ""
+                    let newPath = additionalPaths.joined(separator: ":") + ":" + currentPath
+                    environment["PATH"] = newPath
                     environment["PORT"] = "\(project.port)"
                     
                     // ASP.NET Core specific environment variables
@@ -319,16 +339,18 @@ class ServerManager: ObservableObject {
             let output = String(data: data, encoding: .utf8) ?? ""
             
             // Check if output contains any HTTP ports (common web server ports)
-            let httpPorts = ["5000", "5001", "3000", "8000", "8080"]
+            let httpPorts = ["5000", "5001", "3000", "8000", "8080", "4200", "1313", "4000"]
             for port in httpPorts {
                 if output.contains(":\(port)") {
                     return true
                 }
             }
             
+            // Also check for any listening socket
             return task.terminationStatus == 0 && !output.isEmpty
         } catch {
-            return false
+            // If lsof fails, assume the process is running correctly
+            return process.isRunning
         }
     }
 }

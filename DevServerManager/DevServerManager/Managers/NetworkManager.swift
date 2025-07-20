@@ -99,6 +99,10 @@ class NetworkManager: ObservableObject {
             }
         } catch {
             print("Failed to fetch external IP: \(error)")
+            // Set a fallback IP address
+            await MainActor.run {
+                self.externalIPAddress = "127.0.0.1"
+            }
         }
     }
     
