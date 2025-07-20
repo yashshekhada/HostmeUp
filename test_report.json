@@ -1,0 +1,84 @@
+{
+  "summary": {
+    "total_tests": 9,
+    "passed": 5,
+    "failed": 0,
+    "warnings": 4
+  },
+  "results": [
+    {
+      "test": "Project Structure",
+      "status": "PASS",
+      "details": "All required files present",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Swift Syntax",
+      "status": "WARN",
+      "details": "Found 7 potential issues",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Code Quality",
+      "status": "WARN",
+      "details": "Found 6 quality concerns",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Network Configuration",
+      "status": "PASS",
+      "details": "Network configuration looks good",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Server Management",
+      "status": "PASS",
+      "details": "Server management looks good",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "User Experience",
+      "status": "WARN",
+      "details": "Found 3 UX issues",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Security & Permissions",
+      "status": "WARN",
+      "details": "Found 1 security concerns",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Build Configuration",
+      "status": "PASS",
+      "details": "Build configuration looks good",
+      "timestamp": "2025-07-20 13:38:24"
+    },
+    {
+      "test": "Documentation",
+      "status": "PASS",
+      "details": "Documentation looks complete",
+      "timestamp": "2025-07-20 13:38:24"
+    }
+  ],
+  "issues": [
+    "NetworkManager.swift: Potential force unwrapping",
+    "ServerManager.swift: Potential force unwrapping",
+    "PortForwardingManager.swift: Potential force unwrapping",
+    "ProjectManager.swift: Potential force unwrapping",
+    "StatusView.swift: Potential force unwrapping",
+    "ProjectSettingsView.swift: Potential force unwrapping",
+    "ContentView.swift: Potential force unwrapping",
+    "NetworkManager.swift: MainActor usage detected (good practice)",
+    "ServerManager.swift: Potential retain cycle in Task.detached",
+    "ServerManager.swift: MainActor usage detected (good practice)",
+    "PortForwardingManager.swift: MainActor usage detected (good practice)",
+    "ProjectManager.swift: MainActor usage detected (good practice)",
+    "ContentView.swift: MainActor usage detected (good practice)",
+    "ContentView: Missing @Published properties for state management",
+    "ContentView: Missing error alerts for user feedback",
+    "ContentView: Missing loading indicators",
+    "App sandbox is disabled (may be intentional for server management)"
+  ],
+  "timestamp": "2025-07-20 13:38:24"
+}
